@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// Field Log security rules.
+// Paste this whole file into Firebase console > Firestore Database > Rules, then Publish.
+// Replace the placeholder email below with the admin's email (lowercase).
+// You can list several owners: ['one@uqam.ca', 'two@uqam.ca']
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function owners() { return ['ecsystemscarbonique@gmail.com']; }
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function memberPath() { return /databases/$(database)/documents/members/$(myEmail()); }
+
+    function isOwner()  { return signedIn() && myEmail() in owners(); }
+    function isMember() { return signedIn() && exists(memberPath()); }
+    function isAdmin()  { return isOwner() || (isMember() && get(memberPath()).data.role == 'admin'); }
+    function canUse()   { return isOwner() || isMember(); }
+
+    // Team list. Document id = lowercase email.
+    match /members/{email} {
+      allow read: if canUse() || (signedIn() && email == myEmail());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /sites/{siteId} {
+      allow read: if canUse();
+      allow create, update, delete: if isAdmin();
+
+      match /tasks/{taskId} {
+        allow read: if canUse();
+        allow create: if canUse() && request.resource.data.createdByEmail == myEmail();
+        allow update: if canUse();
+        // Admins can delete anything; others can delete a still-pending task they created.
+        allow delete: if isAdmin()
+          || (canUse() && resource.data.createdByEmail == myEmail() && resource.data.status == 'pending');
+      }
+
+      match /visits/{visitId} {
+        allow read, update: if canUse();
+        allow create: if canUse() && request.resource.data.startedByEmail == myEmail();
+        allow delete: if isAdmin();
+      }
+
+      match /comments/{commentId} {
+        allow read: if canUse();
+        allow create: if canUse() && request.resource.data.authorEmail == myEmail();
+        // Authors can fix or remove their own notes; admins can edit anything.
+        allow update, delete: if isAdmin() || (canUse() && resource.data.authorEmail == myEmail());
+      }
+    }
+  }
+}
