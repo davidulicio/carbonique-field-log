@@ -1,6 +1,6 @@
 # Carbonique Field Log
 
-A small web app to plan and record field work at each site.
+A small web app to plan and record field work at each site. https://davidulicio.github.io/carbonique-field-log/
 
 **Off site** tab: plan the work. Add the tasks to do at each site (with details and priority), edit them, delete them, and add notes before going out.
 
